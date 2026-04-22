@@ -30,6 +30,7 @@ pub struct BoardState {
     pub last_move: Option<Action>,
     pub promote_state: Option<PromoteState>,
     pub under_check: Option<Square>,
+    pub face_up: Side,
 }
 
 pub struct PromoteState {
@@ -43,6 +44,7 @@ pub enum BoardStateEvent {
     Move(Action),
     Selected(Option<SelectedPiece>),
     Promote(Square, Square),
+    FlipBoard,
 }
 
 impl From<BoardStateEvent> for Message {
@@ -64,6 +66,7 @@ impl BoardState {
             last_move: None,
             promote_state: None,
             under_check: None,
+            face_up: Side::Sente,
         }
     }
     pub fn update(&mut self, event: BoardStateEvent) {
@@ -116,7 +119,11 @@ impl BoardState {
                     None
                 };
             }
+            BoardStateEvent::FlipBoard => self.face_up = !self.face_up,
         }
+    }
+    pub fn flipped(&self) -> bool {
+        self.face_up == Side::Gote
     }
 }
 
@@ -195,7 +202,7 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
             _ => return,
         };
         if let Some(PromoteState { from, to, nonpromote }) = self.promote_state {
-            let Some(selected) = select_square(&bounds, cursor) else { return };
+            let Some(selected) = self.select_square(&bounds, cursor) else { return };
 
             if selected != to && selected != nonpromote {
                 return;
@@ -210,7 +217,7 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
         }
 
         let Some(from) = self.selected else { return };
-        let Some(to) = select_square(&bounds, cursor) else {
+        let Some(to) = self.select_square(&bounds, cursor) else {
             shell.publish(select(None));
             return;
         };
@@ -261,12 +268,12 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
             return mouse::Interaction::Grab;
         }
         if let Some(PromoteState { to, nonpromote, .. }) = self.promote_state
-            && (piece_rect(bounds.board, to).contains(cursor)
-                || piece_rect(bounds.board, nonpromote).contains(cursor))
+            && (self.piece_rect(bounds.board, to).contains(cursor)
+                || self.piece_rect(bounds.board, nonpromote).contains(cursor))
         {
             return mouse::Interaction::Pointer;
         }
-        if let Some(square) = select_square(&bounds, cursor)
+        if let Some(square) = self.select_square(&bounds, cursor)
             && self.board.pieces.contains(square)
         {
             return mouse::Interaction::Grab;
@@ -303,12 +310,56 @@ impl BoardState {
     }
 
     fn select_piece(&self, bounds: &Bounds, cursor: Point) -> Option<SelectedPiece> {
-        if let Some(square) = select_square(bounds, cursor) {
+        if let Some(square) = self.select_square(bounds, cursor) {
             self.board.pieces.get(square)?; // don't bother selecting if the piece doesn't exist
             Some(SelectedPiece::Board(square))
         } else {
-            select_from_hand(bounds, cursor)
+            self.select_from_hand(bounds, cursor)
         }
+    }
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn select_from_hand(&self, bounds: &Bounds, cursor: Point) -> Option<SelectedPiece> {
+        for (side, hand) in [(self.face_up, bounds.right_hand), (!self.face_up, bounds.left_hand)] {
+            if !hand.contains(cursor) {
+                continue;
+            }
+            let mut rel_cursor = cursor - hand.position();
+            rel_cursor.y /= hand.height / 7.0;
+            let kind = PieceKind::from_int(if side == self.face_up {
+                (7.0 - rel_cursor.y) as u8
+            } else {
+                rel_cursor.y as u8
+            })?;
+            if kind == PieceKind::King {
+                return None;
+            }
+            return Some(SelectedPiece::Hand(Piece::new(side, kind, false)));
+        }
+        None
+    }
+    fn piece_rect(&self, bounds: Rectangle, sq: Square) -> Rectangle {
+        let sq = if self.flipped() { sq.flip() } else { sq };
+        Rectangle {
+            x: bounds.x + (bounds.width / 9.0) * sq.file() as u8 as f32,
+            y: bounds.y + (bounds.height / 9.0) * sq.rank() as u8 as f32,
+            width: bounds.width / 9.0,
+            height: bounds.height / 9.0,
+        }
+    }
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn select_square(&self, bounds: &Bounds, cursor: Point) -> Option<Square> {
+        if !bounds.board.contains(cursor) {
+            return None;
+        }
+        let board = bounds.board;
+        let mut rel_cursor = cursor - board.position();
+        rel_cursor.x /= board.width / 9.0;
+        rel_cursor.y /= board.height / 9.0;
+        let sq = Square::new(
+            File::from_int(rel_cursor.x as u8).unwrap(),
+            Rank::from_int(rel_cursor.y as u8).unwrap(),
+        );
+        Some(if self.flipped() { sq.flip() } else { sq })
     }
 }
 
@@ -324,51 +375,6 @@ where
 
 fn select(piece: Option<SelectedPiece>) -> Message {
     Message::BoardStateEvent(BoardStateEvent::Selected(piece))
-}
-
-#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn select_square(bounds: &Bounds, cursor: Point) -> Option<Square> {
-    if !bounds.board.contains(cursor) {
-        return None;
-    }
-    let board = bounds.board;
-    let mut rel_cursor = cursor - board.position();
-    rel_cursor.x /= board.width / 9.0;
-    rel_cursor.y /= board.height / 9.0;
-    Some(Square::new(
-        File::from_int(rel_cursor.x as u8).unwrap(),
-        Rank::from_int(rel_cursor.y as u8).unwrap(),
-    ))
-}
-
-fn piece_rect(bounds: Rectangle, sq: Square) -> Rectangle {
-    Rectangle {
-        x: bounds.x + (bounds.width / 9.0) * sq.file() as u8 as f32,
-        y: bounds.y + (bounds.height / 9.0) * sq.rank() as u8 as f32,
-        width: bounds.width / 9.0,
-        height: bounds.height / 9.0,
-    }
-}
-
-#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn select_from_hand(bounds: &Bounds, cursor: Point) -> Option<SelectedPiece> {
-    for (side, hand) in [(Side::Sente, bounds.right_hand), (Side::Gote, bounds.left_hand)] {
-        if !hand.contains(cursor) {
-            continue;
-        }
-        let mut rel_cursor = cursor - hand.position();
-        rel_cursor.y /= hand.height / 7.0;
-        let kind = PieceKind::from_int(if side == Side::Sente {
-            (7.0 - rel_cursor.y) as u8
-        } else {
-            rel_cursor.y as u8
-        })?;
-        if kind == PieceKind::King {
-            return None;
-        }
-        return Some(SelectedPiece::Hand(Piece::new(side, kind, false)));
-    }
-    None
 }
 
 impl SelectedPiece {

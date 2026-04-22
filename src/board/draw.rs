@@ -27,8 +27,6 @@ impl BoardState {
             },
             SelectedPiece::Hand(piece) => piece,
         };
-        let (selected, face_down) = (App::svg_from_piece(piece), piece.side() == Side::Gote);
-
         let square_size = bounds.height / 9.0;
         let rect = Rectangle {
             x: cursor.x - square_size / 2.0,
@@ -36,19 +34,26 @@ impl BoardState {
             width: square_size,
             height: square_size,
         };
-        let rotation = if face_down { Radians::PI } else { Radians(0.0) };
+        let rotation = if piece.side() == self.face_up { Radians(0.0) } else { Radians::PI };
         // infinite bounds so that the piece can be dragged outside the board widget (likely temporary)
         renderer.with_layer(Rectangle::INFINITE, |renderer| {
-            renderer.draw_svg(selected.rotation(rotation), rect, rect);
+            renderer.draw_svg(App::piece_svg(piece).rotation(rotation), rect, rect);
         });
     }
-    fn draw_square_color(pos: Square, color: Color, bounds: &Rectangle, renderer: &mut Renderer) {
-        let sq = bounds.height / 9.0;
+    fn draw_square_color(
+        &self,
+        sq: Square,
+        color: Color,
+        bounds: &Rectangle,
+        renderer: &mut Renderer,
+    ) {
+        let sq = if self.flipped() { sq.flip() } else { sq };
+        let sq_size = bounds.height / 9.0;
         let rect = Rectangle {
-            x: bounds.x + sq * pos.file() as u8 as f32,
-            y: bounds.y + sq * pos.rank() as u8 as f32,
-            width: sq,
-            height: sq,
+            x: bounds.x + sq_size * sq.file() as u8 as f32,
+            y: bounds.y + sq_size * sq.rank() as u8 as f32,
+            width: sq_size,
+            height: sq_size,
         };
         renderer.fill_quad(Quad { bounds: rect, ..Quad::default() }, Background::Color(color));
     }
@@ -71,7 +76,7 @@ impl BoardState {
     fn draw_check_highligh(&self, bounds: Rectangle, renderer: &mut Renderer) {
         renderer.with_layer(bounds, |renderer| {
             let Some(pos) = self.under_check else { return };
-            Self::draw_square_color(pos, CHECK_COLOR, &bounds, renderer);
+            self.draw_square_color(pos, CHECK_COLOR, &bounds, renderer);
         });
     }
 
@@ -79,14 +84,13 @@ impl BoardState {
         renderer.with_layer(bounds, |renderer| {
             for sq in Square::ALL {
                 let Some(piece) = self.board.pieces.get(sq) else { continue };
-                let (mut image, face_down) =
-                    (App::svg_from_piece(piece), piece.side() == Side::Gote);
 
-                let rotation = if face_down { Radians::PI } else { Radians(0.0) };
+                let rotation =
+                    if piece.side() == self.face_up { Radians(0.0) } else { Radians::PI };
                 let opacity =
                     if self.selected == Some(SelectedPiece::Board(sq)) { 0.5 } else { 1.0 };
-                let rect = piece_rect(bounds, sq);
-                image = image.opacity(opacity).rotation(rotation);
+                let rect = self.piece_rect(bounds, sq);
+                let image = App::piece_svg(piece).opacity(opacity).rotation(rotation);
                 renderer.draw_svg(image, rect, rect);
             }
         });
@@ -95,10 +99,11 @@ impl BoardState {
     fn draw_promote_options(&self, bounds: Rectangle, theme: &Theme, renderer: &mut Renderer) {
         let Some(PromoteState { from, to, nonpromote }) = self.promote_state else { return };
         renderer.with_layer(bounds, |renderer| {
-            let rotation = if self.board.active == Side::Gote { Radians::PI } else { Radians(0.0) };
+            let rotation =
+                if self.board.active == self.face_up { Radians(0.0) } else { Radians::PI };
 
-            let promote_rect = piece_rect(bounds, to);
-            let nonpromote_rect = piece_rect(bounds, nonpromote);
+            let promote_rect = self.piece_rect(bounds, to);
+            let nonpromote_rect = self.piece_rect(bounds, nonpromote);
 
             renderer.fill_quad(
                 Quad {
@@ -114,10 +119,10 @@ impl BoardState {
             );
 
             let kind = self.board.pieces.kind(from).expect("Must be a piece to promote");
-            let svg = App::svg_from_piece(Piece::new(self.board.active, kind, true));
+            let svg = App::piece_svg(Piece::new(self.board.active, kind, true));
             renderer.draw_svg(svg.rotation(rotation), promote_rect, promote_rect);
 
-            let svg = App::svg_from_piece(Piece::new(self.board.active, kind, false));
+            let svg = App::piece_svg(Piece::new(self.board.active, kind, false));
             renderer.draw_svg(svg.rotation(rotation), nonpromote_rect, nonpromote_rect);
         });
     }
@@ -125,9 +130,9 @@ impl BoardState {
     fn draw_last_move_squares(&self, bounds: Rectangle, renderer: &mut Renderer) {
         let Some(mov) = self.last_move else { return };
         renderer.with_layer(bounds, |renderer| {
-            Self::draw_square_color(mov.to(), LAST_MOVE_COLOR, &bounds, renderer);
+            self.draw_square_color(mov.to(), LAST_MOVE_COLOR, &bounds, renderer);
             if let Action::Move { from, .. } = mov {
-                Self::draw_square_color(from, LAST_MOVE_COLOR, &bounds, renderer);
+                self.draw_square_color(from, LAST_MOVE_COLOR, &bounds, renderer);
             }
         });
     }
@@ -138,27 +143,28 @@ impl BoardState {
         }
         renderer.with_layer(bounds, |renderer| {
             for sq in self.move_options {
-                Self::draw_square_color(sq, MOVE_OPTION_COLOR, &bounds, renderer);
+                self.draw_square_color(sq, MOVE_OPTION_COLOR, &bounds, renderer);
             }
         });
     }
     pub(super) fn draw_hands(&self, bounds: &Bounds, renderer: &mut Renderer, theme: &Theme) {
-        for (bounds, side) in [(bounds.left_hand, Side::Gote), (bounds.right_hand, Side::Sente)] {
+        for (bounds, side) in [(bounds.left_hand, !self.face_up), (bounds.right_hand, self.face_up)]
+        {
             renderer.with_layer(bounds, |renderer| {
                 for &piece in &PieceKind::ALL[..PieceKind::King as usize] {
                     let count = self.board.hands[side][piece];
-                    let image = App::svg_from_piece(Piece::new(side, piece, false));
+                    let image = App::piece_svg(Piece::new(side, piece, false));
 
-                    let y = if side == Side::Gote {
-                        piece as u8 as f32 * bounds.width
-                    } else {
+                    let y = if side == self.face_up {
                         bounds.height - (piece as u8 + 1) as f32 * bounds.width
+                    } else {
+                        piece as u8 as f32 * bounds.width
                     } + bounds.y;
 
                     let piece_bounds =
                         Rectangle { x: bounds.x, y, width: bounds.width, height: bounds.width };
                     let opacity = if count == 0 { 0.2 } else { 1.0 };
-                    let rotation = if side == Side::Gote { Radians::PI } else { Radians(0.0) };
+                    let rotation = if side == self.face_up { Radians(0.0) } else { Radians::PI };
                     renderer.draw_svg(
                         image.rotation(rotation).opacity(opacity),
                         piece_bounds,

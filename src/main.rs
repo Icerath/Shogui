@@ -86,8 +86,10 @@ impl App {
             let keyboard::Event::KeyPressed { key, modifiers, .. } = event else { return None };
             Some(if key == Key::Character("q".into()) && modifiers.alt() {
                 Message::Exit
-            } else if key == Key::Character("f".into()) {
+            } else if key == Key::Character("f".into()) && modifiers.control() {
                 Message::ToggleFullscreen
+            } else if key == Key::Character("f".into()) {
+                Message::BoardStateEvent(BoardStateEvent::FlipBoard)
             } else {
                 return None;
             })
@@ -96,7 +98,7 @@ impl App {
 }
 
 impl App {
-    fn svg_from_piece(piece: Piece) -> svg::Svg {
+    fn piece_svg(piece: Piece) -> svg::Svg {
         static SVGS: OnceLock<[svg::Svg; Piece::LEN]> = OnceLock::new();
         let svgs = SVGS.get_or_init(|| {
             Piece::ALL.map(|piece| {
