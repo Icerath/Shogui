@@ -1,0 +1,15 @@
+[package]
+name = "shogui"
+version = "0.1.0"
+edition = "2024"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cast_lossless = "allow"
+
+[dependencies]
+iced = { version = "0.14.0", features = ["advanced", "image", "svg"] }
+petty-shogi.path = "../petty-shogi"
+
+[profile.release]
+opt-level = 1
