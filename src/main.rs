@@ -1,16 +1,18 @@
 mod board;
+mod rcolumn;
 
 use std::sync::OnceLock;
 
 use board::{BoardState, BoardStateEvent};
 use iced::{
     Font, Length, Padding, Theme,
-    advanced::svg,
+    advanced::{svg, widget::Text},
     keyboard::{self, Key},
-    widget::{Text, Toggler, button, column, container::Container, row},
+    widget::{Space, Toggler, button, column, container::Container, row, text_input},
     window,
 };
-use petty_shogi::Piece;
+use petty_shogi::{Board, Piece};
+use rcolumn::RColumn;
 
 type Task<T = Message> = iced::Task<T>;
 type Subscription<T = Message> = iced::Subscription<T>;
@@ -26,6 +28,7 @@ enum Message {
     ToggleDarkMode(bool),
     ToggleDebugMode(bool),
     BoardStateEvent(BoardStateEvent),
+    SetSfen(String),
 }
 
 #[allow(clippy::struct_excessive_bools)]
@@ -33,6 +36,7 @@ struct App {
     board_state: BoardState,
     darkmode: bool,
     debug_mode: bool,
+    sfen: String,
 }
 
 fn main() -> iced::Result {
@@ -46,7 +50,13 @@ fn main() -> iced::Result {
 
 impl Default for App {
     fn default() -> Self {
-        Self { board_state: BoardState::init(), darkmode: DEFAULT_DARK_MODE, debug_mode: false }
+        let board_state = BoardState::init(Board::start_pos());
+        Self {
+            sfen: board_state.board.to_sfen(),
+            board_state,
+            darkmode: DEFAULT_DARK_MODE,
+            debug_mode: false,
+        }
     }
 }
 
@@ -56,16 +66,48 @@ impl App {
         match message {
             Message::Exit => std::process::exit(0),
             Message::ToggleFullscreen => return toggle_fullscreen(),
-            Message::ResetBoard => self.board_state = BoardState::init(),
+            Message::ResetBoard => {
+                self.board_state = BoardState::init(Board::start_pos());
+                self.sfen = self.board_state.board.to_sfen();
+            }
             Message::ToggleDarkMode(state) => self.darkmode = state,
             Message::ToggleDebugMode(state) => self.debug_mode = state,
-            Message::BoardStateEvent(event) => self.board_state.update(event),
+            Message::BoardStateEvent(event) => {
+                self.board_state.update(event);
+                self.sfen = self.board_state.board.to_sfen();
+            }
+            Message::SetSfen(sfen) => {
+                if let Some(board) = Board::from_sfen(&sfen) {
+                    self.board_state = BoardState::init(board);
+                    self.sfen = self.board_state.board.to_sfen();
+                }
+            }
         }
         Task::none()
     }
 
     fn view(&self) -> Element<'_> {
-        self.explain(row![self.ui(), Container::new(self.board()).padding(8)])
+        self.explain(row![
+            self.ui(),
+            Container::new(
+                RColumn::new([
+                    Element::new(&self.board_state),
+                    row![
+                        Container::new(Text::new("SFEN").size(16.0).center())
+                            .center_x(Length::Fill)
+                            .padding(4.0),
+                        text_input("", &self.sfen)
+                            .on_input(Message::SetSfen)
+                            .width(Length::FillPortion(9)),
+                        Space::new().width(Length::Fill)
+                    ]
+                    .into()
+                ])
+                .spacing(4.0)
+            )
+            .center(Length::Fill)
+            .padding(8)
+        ])
     }
 
     fn explain<'a>(&self, el: impl Into<Element<'a>>) -> Element<'a> {
@@ -111,13 +153,6 @@ impl App {
             })
         });
         svgs[piece].clone()
-    }
-    fn board(&self) -> Element<'_> {
-        Container::new(&self.board_state)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center(Length::Fill)
-            .into()
     }
     fn ui(&self) -> Element<'_> {
         column![]

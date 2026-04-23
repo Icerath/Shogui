@@ -54,12 +54,10 @@ impl From<BoardStateEvent> for Message {
 }
 
 impl BoardState {
-    pub fn init() -> Self {
-        let board = Board::start_pos();
-        let legal_moves = board.legal_moves(vec![]);
+    pub fn init(board: Board) -> Self {
         Self {
+            legal_moves: board.legal_moves(vec![]),
             board,
-            legal_moves,
             selected: None,
             move_options: Bitboard::EMPTY,
             board_image: Image::new(format!("{}/assets/board.png", env!("CARGO_MANIFEST_DIR"))),
@@ -153,7 +151,7 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
         layout::Node::new(Size::new(width, height))
     }
     fn size(&self) -> Size<Length> {
-        Size { width: Length::Shrink, height: Length::Shrink }
+        Size { width: Length::Fill, height: Length::Fill }
     }
     fn draw(
         &self,
@@ -285,7 +283,6 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
 impl BoardState {
     fn bounds(layout: Layout<'_>) -> Bounds {
         let bounds = layout.bounds();
-        assert!(bounds.width > bounds.height);
         let square_size = bounds.height / 9.0;
         Bounds {
             board: Rectangle {
