@@ -8,6 +8,8 @@ use iced::{
 
 use super::*;
 
+const EMPTY_HAND_OPACITY: f32 = 0.2;
+
 impl BoardState {
     pub fn draw_(&self, layout: Layout, theme: &Theme, cursor: Cursor, renderer: &mut Renderer) {
         let bounds = Self::bounds(layout);
@@ -20,12 +22,18 @@ impl BoardState {
         let Some(cursor) = cursor.position() else { return };
         let Some(selected) = self.selected else { return };
 
+        let mut opacity = 0.9;
         let piece = match selected {
             SelectedPiece::Board(selected) => match self.board.pieces.get(selected) {
                 Some(selected) => selected,
                 None => return,
             },
-            SelectedPiece::Hand(piece) => piece,
+            SelectedPiece::Hand(piece) => {
+                if self.board.hands[piece.side()][piece.kind()] == 0 {
+                    opacity = EMPTY_HAND_OPACITY;
+                }
+                piece
+            }
         };
         let square_size = bounds.height / 9.0;
         let rect = Rectangle {
@@ -35,9 +43,10 @@ impl BoardState {
             height: square_size,
         };
         let rotation = if piece.side() == self.face_up { Radians(0.0) } else { Radians::PI };
+        let image = App::piece_svg(piece).rotation(rotation).opacity(opacity);
         // infinite bounds so that the piece can be dragged outside the board widget (likely temporary)
         renderer.with_layer(Rectangle::INFINITE, |renderer| {
-            renderer.draw_svg(App::piece_svg(piece).rotation(rotation), rect, rect);
+            renderer.draw_svg(image, rect, rect);
         });
     }
     fn draw_square_color(
@@ -163,7 +172,7 @@ impl BoardState {
 
                     let piece_bounds =
                         Rectangle { x: bounds.x, y, width: bounds.width, height: bounds.width };
-                    let opacity = if count == 0 { 0.2 } else { 1.0 };
+                    let opacity = if count == 0 { EMPTY_HAND_OPACITY } else { 1.0 };
                     let rotation = if side == self.face_up { Radians(0.0) } else { Radians::PI };
                     renderer.draw_svg(
                         image.rotation(rotation).opacity(opacity),
