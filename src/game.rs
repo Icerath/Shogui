@@ -3,7 +3,7 @@ pub mod board;
 use board::BoardState;
 use iced::{
     Length,
-    widget::{Container, Space, Text, button, column, row, text_input},
+    widget::{Column, Container, Space, Text, button, row, text_input},
 };
 use petty_shogi::Board;
 
@@ -65,13 +65,15 @@ impl Game {
     }
 
     fn ui(&self) -> Element<'_> {
-        column![
-            button(Text::new("Reset Board")).on_press(Message::Reset),
-            Text::new(format!("Moves: {}", self.board_state.legal_moves.len()))
-        ]
-        .padding(8.0)
-        .spacing(8.0)
-        .into()
+        let mut column = Column::new();
+        if self.board_state.playing.is_none() {
+            column = column.push(button(Text::new("Reset Board")).on_press(Message::Reset));
+        }
+        column
+            .push(Text::new(format!("Moves: {}", self.board_state.legal_moves.len())))
+            .padding(8.0)
+            .spacing(8.0)
+            .into()
     }
 
     fn board(&self) -> Element<'_> {
