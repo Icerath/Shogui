@@ -83,7 +83,8 @@ pub async fn recv(
                     // TODO: handle this properly
                     Ok(message) => sender.try_send(Message::Recv(message)).unwrap(),
                     Err(e) => {
-                        eprintln!("[ERROR] {e:?}");
+                        eprintln!("{e:?}");
+                        sender.try_send(Message::CloseConnection).unwrap();
                         break;
                     }
                 }
