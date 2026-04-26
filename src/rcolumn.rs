@@ -3,16 +3,16 @@ use iced::{
     advanced::{Widget, layout, mouse, widget::Tree},
 };
 
-use crate::{Element, Message};
+use crate::Element;
 
 /// A Column where each child has equal width
-pub struct RColumn<'a> {
-    children: Vec<Element<'a>>,
+pub struct RColumn<'a, Message> {
+    children: Vec<Element<'a, Message>>,
     spacing: f32,
 }
 
-impl<'a> RColumn<'a> {
-    pub(crate) fn new(children: impl IntoIterator<Item = Element<'a>>) -> Self {
+impl<'a, Message> RColumn<'a, Message> {
+    pub(crate) fn new(children: impl IntoIterator<Item = Element<'a, Message>>) -> Self {
         Self { children: children.into_iter().collect(), spacing: 0.0 }
     }
     pub fn spacing(mut self, spacing: f32) -> Self {
@@ -21,7 +21,7 @@ impl<'a> RColumn<'a> {
     }
 }
 
-impl Widget<Message, Theme, Renderer> for RColumn<'_> {
+impl<Message> Widget<Message, Theme, Renderer> for RColumn<'_, Message> {
     fn size(&self) -> Size<Length> {
         Size::new(Length::Fill, Length::Fill)
     }
@@ -139,8 +139,8 @@ impl Widget<Message, Theme, Renderer> for RColumn<'_> {
     }
 }
 
-impl<'a> From<RColumn<'a>> for Element<'a> {
-    fn from(column: RColumn<'a>) -> Self {
+impl<'a, Message: 'a> From<RColumn<'a, Message>> for Element<'a, Message> {
+    fn from(column: RColumn<'a, Message>) -> Self {
         Element::new(column)
     }
 }

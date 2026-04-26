@@ -8,8 +8,15 @@ pedantic = { level = "warn", priority = -1 }
 cast_lossless = "allow"
 
 [dependencies]
-iced = { version = "0.14.0", features = ["advanced", "image", "svg"] }
-petty-shogi.path = "../petty-shogi"
+base64 = "0.22.1"
+iced = { version = "0.14", features = ["advanced", "image", "svg", "tokio"] }
+iced_aw = { version = "0.13.1", features = ["drop_down"] }
+local-ip-address = "0.6.12"
+petty-shogi = { path = "../petty-shogi", features = ["serde"] }
+rand = "0.10.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+tokio = { version = "1.52.1", features = ["io-util", "macros", "net"] }
 
 [profile.release]
 opt-level = 1

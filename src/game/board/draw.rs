@@ -1,6 +1,8 @@
+use std::sync::OnceLock;
+
 use iced::{
     Border,
-    advanced::{Text, text::Renderer as _},
+    advanced::{Text, svg, text::Renderer as _},
     alignment,
     border::Radius,
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
@@ -43,7 +45,7 @@ impl BoardState {
             height: square_size,
         };
         let rotation = if piece.side() == self.face_up { Radians(0.0) } else { Radians::PI };
-        let image = App::piece_svg(piece).rotation(rotation).opacity(opacity);
+        let image = piece_svg(piece).rotation(rotation).opacity(opacity);
         // infinite bounds so that the piece can be dragged outside the board widget (likely temporary)
         renderer.with_layer(Rectangle::INFINITE, |renderer| {
             renderer.draw_svg(image, rect, rect);
@@ -99,7 +101,7 @@ impl BoardState {
                 let opacity =
                     if self.selected == Some(SelectedPiece::Board(sq)) { 0.5 } else { 1.0 };
                 let rect = self.piece_rect(bounds, sq);
-                let image = App::piece_svg(piece).opacity(opacity).rotation(rotation);
+                let image = piece_svg(piece).opacity(opacity).rotation(rotation);
                 renderer.draw_svg(image, rect, rect);
             }
         });
@@ -128,10 +130,10 @@ impl BoardState {
             );
 
             let kind = self.board.pieces.kind(from).expect("Must be a piece to promote");
-            let svg = App::piece_svg(Piece::new(self.board.active, kind, true));
+            let svg = piece_svg(Piece::new(self.board.active, kind, true));
             renderer.draw_svg(svg.rotation(rotation), promote_rect, promote_rect);
 
-            let svg = App::piece_svg(Piece::new(self.board.active, kind, false));
+            let svg = piece_svg(Piece::new(self.board.active, kind, false));
             renderer.draw_svg(svg.rotation(rotation), nonpromote_rect, nonpromote_rect);
         });
     }
@@ -162,7 +164,7 @@ impl BoardState {
             renderer.with_layer(bounds, |renderer| {
                 for &piece in &PieceKind::ALL[..PieceKind::King as usize] {
                     let count = self.board.hands[side][piece];
-                    let image = App::piece_svg(Piece::new(side, piece, false));
+                    let image = piece_svg(Piece::new(side, piece, false));
 
                     let y = if side == self.face_up {
                         bounds.height - (piece as u8 + 1) as f32 * bounds.width
@@ -252,4 +254,19 @@ impl BoardState {
             }
         });
     }
+}
+
+fn piece_svg(piece: Piece) -> svg::Svg {
+    static SVGS: OnceLock<[svg::Svg; Piece::LEN]> = OnceLock::new();
+    let svgs = SVGS.get_or_init(|| {
+        Piece::ALL.map(|piece| {
+            let kind = format!("{:?}", piece.kind()).to_lowercase();
+            let promoted = if piece.promoted() { "promoted-" } else { "" };
+            svg::Svg::new(format!(
+                "{}/assets/pieces/{promoted}{kind}.svg",
+                env!("CARGO_MANIFEST_DIR")
+            ))
+        })
+    });
+    svgs[piece].clone()
 }

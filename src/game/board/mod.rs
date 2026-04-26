@@ -14,8 +14,6 @@ use iced::{
 };
 use petty_shogi::{Action, Bitboard, Board, File, Piece, PieceKind, Rank, Side, Square};
 
-use crate::{App, Message};
-
 const LAST_MOVE_COLOR: Color = Color { r: 0.6, g: 0.8, b: 0.2, a: 0.5 };
 const MOVE_OPTION_COLOR: Color = Color { r: 0.4, b: 0.4, g: 0.9, a: 0.5 };
 const CHECK_COLOR: Color = Color { r: 0.9, g: 0.4, b: 0.4, a: 0.5 };
@@ -31,6 +29,7 @@ pub struct BoardState {
     pub promote_state: Option<PromoteState>,
     pub under_check: Option<Square>,
     pub face_up: Side,
+    pub playing: Option<Side>,
 }
 
 pub struct PromoteState {
@@ -40,17 +39,11 @@ pub struct PromoteState {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum BoardStateEvent {
+pub enum Message {
     Move(Action),
     Selected(Option<SelectedPiece>),
     Promote(Square, Square),
     FlipBoard,
-}
-
-impl From<BoardStateEvent> for Message {
-    fn from(event: BoardStateEvent) -> Self {
-        Self::BoardStateEvent(event)
-    }
 }
 
 impl BoardState {
@@ -65,20 +58,25 @@ impl BoardState {
             promote_state: None,
             under_check: None,
             face_up: Side::Sente,
+            playing: None,
         }
     }
-    pub fn update(&mut self, event: BoardStateEvent) {
+    pub fn update(&mut self, event: Message) {
         match event {
-            BoardStateEvent::Selected(selection) => {
+            Message::Selected(selection) => {
                 self.selected = selection;
                 self.promote_state = None;
                 self.move_options = Bitboard::EMPTY;
                 let Some(selected) = selection else { return };
-                if let SelectedPiece::Hand(selected) = selected
-                    && selected.side() != self.board.active
+                if self.selected_side(selected) != self.board.active {
+                    return;
+                }
+                if let Some(playing) = self.playing
+                    && self.selected_side(selected) != playing
                 {
                     return;
                 }
+
                 self.move_options = self
                     .legal_moves
                     .iter()
@@ -86,7 +84,7 @@ impl BoardState {
                     .map(|mov| mov.to())
                     .collect();
             }
-            BoardStateEvent::Promote(from, to) => {
+            Message::Promote(from, to) => {
                 self.selected = None;
                 self.move_options = Bitboard::EMPTY;
 
@@ -95,7 +93,7 @@ impl BoardState {
                     .unwrap_or_else(|| to.forward(self.board.active).unwrap());
                 self.promote_state = Some(PromoteState { from, to, nonpromote });
             }
-            BoardStateEvent::Move(action) => {
+            Message::Move(action) => {
                 assert!(self.legal_moves.contains(&action));
 
                 self.board.play(action);
@@ -117,11 +115,19 @@ impl BoardState {
                     None
                 };
             }
-            BoardStateEvent::FlipBoard => self.face_up = !self.face_up,
+            Message::FlipBoard => self.face_up = !self.face_up,
         }
     }
     pub fn flipped(&self) -> bool {
         self.face_up == Side::Gote
+    }
+    fn selected_side(&self, selected: SelectedPiece) -> Side {
+        match selected {
+            SelectedPiece::Board(sq) => {
+                self.board.pieces.side(sq).expect("selected piece should exist")
+            }
+            SelectedPiece::Hand(piece) => piece.side(),
+        }
     }
 }
 
@@ -189,12 +195,8 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
         let is_pressed = match event {
             mouse::Event::ButtonPressed(mouse::Button::Left) => true,
             mouse::Event::ButtonReleased(mouse::Button::Left) => false,
-            mouse::Event::CursorLeft => {
-                shell.publish(BoardStateEvent::Selected(None).into());
-                return;
-            }
-            mouse::Event::ButtonPressed(mouse::Button::Right) => {
-                shell.publish(select(None));
+            mouse::Event::CursorLeft | mouse::Event::ButtonPressed(mouse::Button::Right) => {
+                shell.publish(Message::Selected(None));
                 return;
             }
             _ => return,
@@ -206,19 +208,31 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
                 return;
             }
             let promoted = selected == to;
-            shell.publish(BoardStateEvent::Move(Action::Move { from, to, promoted }).into());
+            shell.publish(Message::Move(Action::Move { from, to, promoted }));
             return;
         }
         if is_pressed {
-            shell.publish(select(self.select_piece(&bounds, cursor)));
+            shell.publish({
+                let piece = self.select_piece(&bounds, cursor);
+                Message::Selected(piece)
+            });
             return;
         }
 
         let Some(from) = self.selected else { return };
+
+        if let Some(playing) = self.playing
+            && playing != self.selected_side(from)
+        {
+            shell.publish(Message::Selected(None));
+            return;
+        }
+
         let Some(to) = self.select_square(&bounds, cursor) else {
-            shell.publish(select(None));
+            shell.publish(Message::Selected(None));
             return;
         };
+
         let message = match from {
             SelectedPiece::Board(from) => {
                 let nonpromote = Action::Move { from, to, promoted: false };
@@ -228,19 +242,19 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
                 let has_promote = self.legal_moves.contains(&promote);
 
                 match (has_promote, has_nonpromote) {
-                    (false, false) => select(None),
-                    (false, true) => BoardStateEvent::Move(nonpromote).into(),
-                    (true, false) => BoardStateEvent::Move(promote).into(),
-                    (true, true) => BoardStateEvent::Promote(from, to).into(),
+                    (false, false) => Message::Selected(None),
+                    (false, true) => Message::Move(nonpromote),
+                    (true, false) => Message::Move(promote),
+                    (true, true) => Message::Promote(from, to),
                 }
             }
             SelectedPiece::Hand(piece) => {
                 if piece.side() == self.board.active
                     && self.legal_moves.contains(&Action::Drop { piece: piece.kind(), to })
                 {
-                    BoardStateEvent::Move(Action::Drop { piece: piece.kind(), to }).into()
+                    Message::Move(Action::Drop { piece: piece.kind(), to })
                 } else {
-                    select(None)
+                    Message::Selected(None)
                 }
             }
         };
@@ -352,10 +366,8 @@ impl BoardState {
         let mut rel_cursor = cursor - board.position();
         rel_cursor.x /= board.width / 9.0;
         rel_cursor.y /= board.height / 9.0;
-        let sq = Square::new(
-            File::from_int(rel_cursor.x as u8).unwrap(),
-            Rank::from_int(rel_cursor.y as u8).unwrap(),
-        );
+        let sq =
+            Square::new(File::from_int(rel_cursor.x as u8)?, Rank::from_int(rel_cursor.y as u8)?);
         Some(if self.flipped() { sq.flip() } else { sq })
     }
 }
@@ -368,10 +380,6 @@ where
     fn from(state: &'a BoardState) -> Element<'a, Message, Theme, Renderer> {
         Element::new(state)
     }
-}
-
-fn select(piece: Option<SelectedPiece>) -> Message {
-    Message::BoardStateEvent(BoardStateEvent::Selected(piece))
 }
 
 impl SelectedPiece {
