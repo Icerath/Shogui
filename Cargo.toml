@@ -9,6 +9,7 @@ cast_lossless = "allow"
 
 [dependencies]
 base64 = "0.22.1"
+dirs = "6.0.0"
 iced = { version = "0.14", features = ["advanced", "image", "svg", "tokio"] }
 iced_aw = { version = "0.13.1", features = ["drop_down"] }
 local-ip-address = "0.6.12"

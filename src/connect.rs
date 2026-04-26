@@ -24,16 +24,29 @@ use petty_shogi::{Board, Side};
 use crate::{
     App, Task,
     game::{self, Game, board::BoardState},
+    settings::Settings,
 };
 
 type Element<'a, T = Message> = crate::Element<'a, T>;
 
-#[derive(Default)]
 pub struct Connect {
     port: String,
     invite: String,
     state: State,
     pub game_settings: GameSettings,
+    settings: &'static Settings,
+}
+
+impl Connect {
+    pub fn new(settings: &'static Settings) -> Self {
+        Self {
+            port: settings.port().map_or_else(String::new, |port| port.to_string()),
+            invite: String::default(),
+            state: State::default(),
+            game_settings: GameSettings::default(),
+            settings,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -108,10 +121,13 @@ impl Connect {
             Message::OpenHost => self.state = State::HostMenu,
             Message::OpenJoin => self.state = State::JoinMenu,
             Message::SubmitHost => {
-                let Ok(port) = self.port.parse::<u16>() else {
-                    // TODO: show error
-                    return Task::none();
+                let port = if self.port.trim().is_empty() {
+                    self.settings.port()
+                } else {
+                    self.port.parse::<u16>().ok()
                 };
+                _ = self.settings.set_port(port);
+                let Some(port) = port else { return Task::none() };
                 let Ok(ip) = local_ip_address::local_ip() else {
                     // TODO: show error
                     return Task::none();

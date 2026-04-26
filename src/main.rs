@@ -1,6 +1,9 @@
+#![feature(macro_metavar_expr_concat)]
+
 mod connect;
 mod game;
 mod rcolumn;
+mod settings;
 
 use connect::Connect;
 use game::Game;
@@ -11,12 +14,11 @@ use iced::{
     widget::{Row, button, column},
     window,
 };
+use settings::Settings;
 
 type Task<T = Message> = iced::Task<T>;
 type Subscription<T = Message> = iced::Subscription<T>;
 type Element<'a, M = Message> = iced::Element<'a, M, Theme, iced::Renderer>;
-
-const DEFAULT_DARK_MODE: bool = true;
 
 #[derive(Clone)]
 enum Message {
@@ -31,18 +33,19 @@ enum Message {
 
 #[allow(clippy::struct_excessive_bools)]
 struct App {
-    darkmode: bool,
     debug_mode: bool,
     text: f32,
     screen: Screen,
     game: Game,
     connect: Connect,
+    settings: &'static Settings,
 }
 
 pub const TITLE: &str = concat!("Shogui ", env!("CARGO_PKG_VERSION"));
 
 fn main() -> iced::Result {
-    iced::application(App::default, App::update, App::view)
+    let settings = Box::leak(Box::new(Settings::read().unwrap()));
+    iced::application(|| App::new(settings), App::update, App::view)
         .title(TITLE)
         .subscription(App::subscription)
         .theme(App::theme)
@@ -50,15 +53,15 @@ fn main() -> iced::Result {
         .run()
 }
 
-impl Default for App {
-    fn default() -> Self {
+impl App {
+    fn new(settings: &'static Settings) -> Self {
         Self {
             game: Game::default(),
-            connect: Connect::default(),
-            darkmode: DEFAULT_DARK_MODE,
+            connect: Connect::new(settings),
             debug_mode: false,
             text: 16.0,
             screen: Screen::Game,
+            settings,
         }
     }
 }
@@ -75,7 +78,7 @@ impl App {
         match message {
             Message::Exit => std::process::exit(0),
             Message::ToggleFullscreen => return toggle_fullscreen(),
-            Message::ToggleDarkMode(state) => self.darkmode = state,
+            Message::ToggleDarkMode(state) => _ = self.settings.set_dark_mode(state),
             Message::ToggleDebugMode => self.debug_mode = !self.debug_mode,
             Message::Screen(screen) => self.screen = screen,
             Message::Game(message) => return self.game.update(message, &mut self.connect),
@@ -118,7 +121,7 @@ impl App {
     }
 
     fn theme(&self) -> Theme {
-        if self.darkmode { Theme::Dark } else { Theme::Light }
+        if self.settings.dark_mode() { Theme::Dark } else { Theme::Light }
     }
     #[allow(clippy::unused_self)]
     fn subscription(&self) -> Subscription {
