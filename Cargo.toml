@@ -3,6 +3,9 @@ name = "shogui"
 version = "0.1.0"
 edition = "2024"
 
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Icerath/shogui"
+
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 cast_lossless = "allow"
