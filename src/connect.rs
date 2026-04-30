@@ -191,7 +191,7 @@ impl Connect {
                 .map(crate::Message::Connect);
             }
             Message::Recv(packet) => {
-                let &State::Connected { host, .. } = &self.state else {
+                let &State::Connected { host, ref stream, .. } = &self.state else {
                     return Task::none();
                 };
                 match packet {
@@ -199,6 +199,10 @@ impl Connect {
                         self.state = if host { State::HostMenu } else { State::JoinMenu };
                     }
                     Packet::PlayMove(mov) => {
+                        if !game.board_state.legal_moves.contains(&mov) {
+                            return task(protocol::send(stream.clone(), Packet::CloseConnection));
+                        }
+
                         return game
                             .update(game::Message::Board(game::board::Message::Move(mov)), self);
                     }
