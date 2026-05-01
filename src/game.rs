@@ -85,7 +85,9 @@ impl Game {
                         .center_x(Length::Fill)
                         .padding(4.0),
                     text_input("", &self.sfen)
-                        .on_input(Message::SetSfen)
+                        .on_input_maybe(
+                            self.board_state.playing.is_none().then_some(Message::SetSfen)
+                        )
                         .width(Length::FillPortion(9)),
                     Space::new().width(Length::Fill)
                 ]

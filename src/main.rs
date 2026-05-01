@@ -82,9 +82,7 @@ impl App {
             Message::ToggleDebugMode => self.debug_mode = !self.debug_mode,
             Message::Screen(screen) => self.screen = screen,
             Message::Game(message) => return self.game.update(message, &mut self.connect),
-            Message::Connect(message) => {
-                return self.connect.update(message, &mut self.game);
-            }
+            Message::Connect(message) => return self.connect.update(message, &mut self.game),
         }
         Task::none()
     }

@@ -214,6 +214,7 @@ impl Connect {
                 return task(protocol::send(stream.clone(), packet));
             }
             Message::CloseConnection => {
+                game.board_state.playing = None;
                 let State::Connected { host, stream, .. } = &self.state else {
                     return Task::none();
                 };
