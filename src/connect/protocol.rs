@@ -6,7 +6,7 @@ use std::{
 
 use base64::prelude::*;
 use iced::futures::channel::{mpsc, oneshot};
-use petty_shogi::Action;
+use petty_shogi::Move;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -14,7 +14,7 @@ use super::{GameSettings, Message};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Packet {
-    PlayMove(Action),
+    PlayMove(Move),
     CloseConnection,
     Rejected,
 }

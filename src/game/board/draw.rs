@@ -142,7 +142,7 @@ impl BoardState {
         let Some(mov) = self.last_move else { return };
         renderer.with_layer(bounds, |renderer| {
             self.draw_square_color(mov.to(), LAST_MOVE_COLOR, &bounds, renderer);
-            if let Action::Move { from, .. } = mov {
+            if let Move::Board { from, .. } = mov {
                 self.draw_square_color(from, LAST_MOVE_COLOR, &bounds, renderer);
             }
         });

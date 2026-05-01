@@ -12,7 +12,7 @@ use iced::{
     },
     mouse::{self, Cursor},
 };
-use petty_shogi::{Action, Bitboard, Board, File, Piece, PieceKind, Rank, Side, Square};
+use petty_shogi::{Bitboard, Board, File, Move, Piece, PieceKind, Rank, Side, Square};
 
 const LAST_MOVE_COLOR: Color = Color { r: 0.6, g: 0.8, b: 0.2, a: 0.5 };
 const MOVE_OPTION_COLOR: Color = Color { r: 0.4, b: 0.4, g: 0.9, a: 0.5 };
@@ -20,12 +20,12 @@ const CHECK_COLOR: Color = Color { r: 0.9, g: 0.4, b: 0.4, a: 0.5 };
 
 pub struct BoardState {
     pub board: Board,
-    pub legal_moves: Vec<Action>,
+    pub legal_moves: Vec<Move>,
     pub selected: Option<SelectedPiece>,
     pub move_options: Bitboard,
 
     pub board_image: Image,
-    pub last_move: Option<Action>,
+    pub last_move: Option<Move>,
     pub promote_state: Option<PromoteState>,
     pub under_check: Option<Square>,
     pub face_up: Side,
@@ -40,7 +40,7 @@ pub struct PromoteState {
 
 #[derive(Debug, Clone, Copy)]
 pub enum Message {
-    Move(Action),
+    Move(Move),
     Selected(Option<SelectedPiece>),
     Promote(Square, Square),
     FlipBoard,
@@ -208,7 +208,7 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
                 return;
             }
             let promoted = selected == to;
-            shell.publish(Message::Move(Action::Move { from, to, promoted }));
+            shell.publish(Message::Move(Move::Board { from, to, promoted }));
             return;
         }
         if is_pressed {
@@ -235,8 +235,8 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
 
         let message = match from {
             SelectedPiece::Board(from) => {
-                let nonpromote = Action::Move { from, to, promoted: false };
-                let promote = Action::Move { from, to, promoted: true };
+                let nonpromote = Move::Board { from, to, promoted: false };
+                let promote = Move::Board { from, to, promoted: true };
 
                 let has_nonpromote = self.legal_moves.contains(&nonpromote);
                 let has_promote = self.legal_moves.contains(&promote);
@@ -250,9 +250,9 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
             }
             SelectedPiece::Hand(piece) => {
                 if piece.side() == self.board.active
-                    && self.legal_moves.contains(&Action::Drop { piece: piece.kind(), to })
+                    && self.legal_moves.contains(&Move::Drop { piece: piece.kind(), to })
                 {
-                    Message::Move(Action::Drop { piece: piece.kind(), to })
+                    Message::Move(Move::Drop { piece: piece.kind(), to })
                 } else {
                     Message::Selected(None)
                 }
@@ -383,10 +383,10 @@ where
 }
 
 impl SelectedPiece {
-    pub fn matches(self, action: Action) -> bool {
+    pub fn matches(self, action: Move) -> bool {
         match (action, self) {
-            (Action::Move { from, .. }, Self::Board(selected)) => from == selected,
-            (Action::Drop { piece, .. }, Self::Hand(selected)) => piece == selected.kind(),
+            (Move::Board { from, .. }, Self::Board(selected)) => from == selected,
+            (Move::Drop { piece, .. }, Self::Hand(selected)) => piece == selected.kind(),
             _ => false,
         }
     }
