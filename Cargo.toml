@@ -24,3 +24,6 @@ tokio = { version = "1.52.1", features = ["io-util", "macros", "net"] }
 
 [profile.release]
 opt-level = 1
+
+[profile.dev.package.petty-shogi]
+opt-level = 3
