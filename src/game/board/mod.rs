@@ -76,13 +76,7 @@ impl BoardState {
                 {
                     return;
                 }
-
-                self.move_options = self
-                    .legal_moves
-                    .iter()
-                    .filter(|&&mov| selected.matches(mov))
-                    .map(|mov| mov.to())
-                    .collect();
+                self.update_move_options(selected);
             }
             Message::Promote(from, to) => {
                 self.selected = None;
@@ -96,15 +90,22 @@ impl BoardState {
             Message::Move(action) => {
                 assert!(self.legal_moves.contains(&action));
 
+                if self.playing.is_none_or(|playing| self.board.active == playing) {
+                    self.selected = None;
+                }
+
                 self.board.play(action);
 
                 self.legal_moves.clear();
                 self.board.legal_moves(&mut self.legal_moves);
 
                 self.last_move = Some(action);
-                self.selected = None;
                 self.move_options = Bitboard::EMPTY;
                 self.promote_state = None;
+
+                if let Some(selected) = self.selected {
+                    self.update_move_options(selected);
+                }
 
                 self.under_check = if self.board.is_check()
                     && let Some(king) =
@@ -120,6 +121,14 @@ impl BoardState {
     }
     pub fn flipped(&self) -> bool {
         self.face_up == Side::Gote
+    }
+    fn update_move_options(&mut self, selected: SelectedPiece) {
+        self.move_options = self
+            .legal_moves
+            .iter()
+            .filter(|&&mov| selected.matches(mov))
+            .map(|mov| mov.to())
+            .collect();
     }
     fn selected_side(&self, selected: SelectedPiece) -> Side {
         match selected {
