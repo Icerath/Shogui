@@ -104,18 +104,17 @@ impl Default for GameSettings {
     }
 }
 
+fn task(future: impl Future<Output = Message> + MaybeSend + 'static) -> Task {
+    Task::future(future).map(crate::Message::Connect)
+}
 impl Connect {
     pub fn our_side(&self) -> Option<Side> {
         let State::Connected { host, .. } = self.state else { return None };
         Some(if host { self.game_settings.host_side } else { !self.game_settings.host_side })
     }
-}
-
-fn task(future: impl Future<Output = Message> + MaybeSend + 'static) -> Task {
-    Task::future(future).map(crate::Message::Connect)
-}
-
-impl Connect {
+    pub fn is_connected(&self) -> bool {
+        self.our_side().is_some()
+    }
     pub fn update(&mut self, message: Message, game: &mut Game) -> Task {
         match message {
             Message::OpenHost => self.state = State::HostMenu,

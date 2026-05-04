@@ -10,7 +10,7 @@ use game::Game;
 use iced::{
     Font, Length, Theme,
     advanced::widget::Text,
-    keyboard::{self, Key},
+    keyboard::{self, Key, key::Named},
     widget::{Row, button, column},
     window,
 };
@@ -29,6 +29,7 @@ enum Message {
     ToggleFullscreen,
     ToggleDarkMode(bool),
     ToggleDebugMode,
+    OffsetHistory(i32),
 }
 
 #[allow(clippy::struct_excessive_bools)]
@@ -88,6 +89,12 @@ impl App {
                 }
                 return self.connect.update(message, &mut self.game);
             }
+            Message::OffsetHistory(offset) => {
+                if !self.connect.is_connected() {
+                    let new_ply = self.game.history.len().saturating_add_signed(offset as isize);
+                    return self.game.update(game::Message::SetPly(new_ply), &mut self.connect);
+                }
+            }
         }
         Task::none()
     }
@@ -136,6 +143,10 @@ impl App {
                 Message::ToggleFullscreen
             } else if key == Key::Character("d".into()) && modifiers.control() {
                 Message::ToggleDebugMode
+            } else if key == Key::Named(Named::ArrowLeft) {
+                Message::OffsetHistory(-1)
+            } else if key == Key::Named(Named::ArrowRight) {
+                Message::OffsetHistory(1)
             } else {
                 return None;
             })

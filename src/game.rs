@@ -9,7 +9,7 @@ use iced::{
     widget::{Column, Container, Space, Text, button, row, text_input},
 };
 use petty_shogi::{
-    Board, Engine,
+    Board, Engine, Move,
     command::{Command, GoCommand, Position},
     response::{BestMove, Response},
 };
@@ -29,9 +29,11 @@ pub enum Message {
     SetSfen(String),
     Board(board::Message),
     EngineResponse(Arc<Response>),
+    SetPly(usize),
 }
 
 pub struct Game {
+    pub history: Vec<(Board, Move)>,
     pub board_state: BoardState,
     pub sfen: String,
     pub engine: Option<Engine>,
@@ -40,15 +42,37 @@ pub struct Game {
 impl Default for Game {
     fn default() -> Self {
         let board = Board::start_pos();
-        Self { sfen: board.to_sfen(), board_state: BoardState::init(board), engine: None }
+        Self {
+            sfen: board.to_sfen(),
+            board_state: BoardState::init(board),
+            engine: None,
+            history: vec![],
+        }
     }
 }
 
 impl Game {
     pub fn update(&mut self, message: Message, connect: &mut Connect) -> crate::Task {
         match message {
+            Message::SetPly(ply) => 'blk: {
+                let Some((board, _mov)) = self.history.get(ply).cloned() else { break 'blk };
+                self.history.truncate(ply);
+                self.sfen = board.to_sfen();
+                let playing = self.board_state.playing;
+                self.board_state = BoardState::init(board);
+                self.board_state.playing = playing;
+                self.board_state.last_move = ply.checked_sub(1).map(|ply| self.history[ply].1);
+                if let Some(engine) = &self.engine {
+                    engine.stop();
+                }
+            }
             Message::EngineResponse(response) => match *response {
                 Response::BestMove(BestMove::Move { mov, ponder: _ }) => {
+                    if !self.board_state.legal_moves.contains(&mov) {
+                        eprintln!("[ERROR] engine tried to play {mov}");
+                        return crate::Task::none();
+                    }
+                    self.history.push((self.board_state.board.clone(), mov));
                     self.board_state.update(board::Message::Move(mov));
                     self.sfen = self.board_state.board.to_sfen();
                     self.engine
@@ -73,15 +97,20 @@ impl Game {
             Message::Reset => {
                 self.board_state = BoardState::init(Board::start_pos());
                 self.sfen = self.board_state.board.to_sfen();
+                self.history.clear();
             }
             Message::Board(message) => {
+                if let board::Message::Move(mov) = message {
+                    self.history.push((self.board_state.board.clone(), mov));
+                }
                 self.board_state.update(message);
                 self.sfen = self.board_state.board.to_sfen();
+
                 if let Some(our_side) = self.board_state.playing
                     && let board::Message::Move(mov) = message
                     && self.board_state.board.active != our_side
                 {
-                    if connect.our_side().is_some() {
+                    if connect.is_connected() {
                         return connect.update(connect::Message::Send(Packet::PlayMove(mov)), self);
                     }
                     if let Some(engine) = &mut self.engine {
