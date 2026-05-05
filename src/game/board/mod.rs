@@ -1,7 +1,7 @@
 mod draw;
 
 use iced::{
-    Background, Color, Element, Length, Point, Radians, Rectangle, Renderer, Size, Theme, Vector,
+    Background, Color, Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Layout, Widget,
         image::{self, Image, Renderer as _},

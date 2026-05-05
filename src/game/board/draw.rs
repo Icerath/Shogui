@@ -44,8 +44,7 @@ impl BoardState {
             width: square_size,
             height: square_size,
         };
-        let rotation = if piece.side() == self.face_up { Radians(0.0) } else { Radians::PI };
-        let image = piece_svg(piece).rotation(rotation).opacity(opacity);
+        let image = self.piece_svg(piece).opacity(opacity);
         // infinite bounds so that the piece can be dragged outside the board widget (likely temporary)
         renderer.with_layer(Rectangle::INFINITE, |renderer| {
             renderer.draw_svg(image, rect, rect);
@@ -96,12 +95,10 @@ impl BoardState {
             for sq in Square::ALL {
                 let Some(piece) = self.board.pieces.get(sq) else { continue };
 
-                let rotation =
-                    if piece.side() == self.face_up { Radians(0.0) } else { Radians::PI };
                 let opacity =
                     if self.selected == Some(SelectedPiece::Board(sq)) { 0.5 } else { 1.0 };
                 let rect = self.piece_rect(bounds, sq);
-                let image = piece_svg(piece).opacity(opacity).rotation(rotation);
+                let image = self.piece_svg(piece).opacity(opacity);
                 renderer.draw_svg(image, rect, rect);
             }
         });
@@ -110,9 +107,6 @@ impl BoardState {
     fn draw_promote_options(&self, bounds: Rectangle, theme: &Theme, renderer: &mut Renderer) {
         let Some(PromoteState { from, to, nonpromote }) = self.promote_state else { return };
         renderer.with_layer(bounds, |renderer| {
-            let rotation =
-                if self.board.active == self.face_up { Radians(0.0) } else { Radians::PI };
-
             let promote_rect = self.piece_rect(bounds, to);
             let nonpromote_rect = self.piece_rect(bounds, nonpromote);
 
@@ -130,11 +124,17 @@ impl BoardState {
             );
 
             let kind = self.board.pieces.kind(from).expect("Must be a piece to promote");
-            let svg = piece_svg(Piece::new(self.board.active, kind, true));
-            renderer.draw_svg(svg.rotation(rotation), promote_rect, promote_rect);
+            renderer.draw_svg(
+                self.piece_svg(Piece::new(self.board.active, kind, true)),
+                promote_rect,
+                promote_rect,
+            );
 
-            let svg = piece_svg(Piece::new(self.board.active, kind, false));
-            renderer.draw_svg(svg.rotation(rotation), nonpromote_rect, nonpromote_rect);
+            renderer.draw_svg(
+                self.piece_svg(Piece::new(self.board.active, kind, false)),
+                nonpromote_rect,
+                nonpromote_rect,
+            );
         });
     }
 
@@ -164,7 +164,7 @@ impl BoardState {
             renderer.with_layer(bounds, |renderer| {
                 for &piece in &PieceKind::ALL[..PieceKind::King as usize] {
                     let count = self.board.hands[side][piece];
-                    let image = piece_svg(Piece::new(side, piece, false));
+                    let image = self.piece_svg(Piece::new(side, piece, false));
 
                     let y = if side == self.face_up {
                         bounds.height - (piece as u8 + 1) as f32 * bounds.width
@@ -175,12 +175,7 @@ impl BoardState {
                     let piece_bounds =
                         Rectangle { x: bounds.x, y, width: bounds.width, height: bounds.width };
                     let opacity = if count == 0 { EMPTY_HAND_OPACITY } else { 1.0 };
-                    let rotation = if side == self.face_up { Radians(0.0) } else { Radians::PI };
-                    renderer.draw_svg(
-                        image.rotation(rotation).opacity(opacity),
-                        piece_bounds,
-                        piece_bounds,
-                    );
+                    renderer.draw_svg(image.opacity(opacity), piece_bounds, piece_bounds);
 
                     if count == 0 {
                         continue;
@@ -254,19 +249,54 @@ impl BoardState {
             }
         });
     }
+    fn piece_svg(&self, piece: Piece) -> svg::Svg {
+        static SVGS: OnceLock<[svg::Svg; Piece::LEN]> = OnceLock::new();
+        let svgs = SVGS.get_or_init(|| {
+            Piece::ALL.map(|piece| {
+                svg::Svg::new(format!(
+                    "{}/assets/pieces/{}.svg",
+                    env!("CARGO_MANIFEST_DIR"),
+                    piece_name(piece),
+                ))
+            })
+        });
+        let side = if piece.side() == self.face_up { Side::Sente } else { Side::Gote };
+        svgs[Piece::new(side, piece.kind(), piece.promoted())].clone()
+    }
 }
 
-fn piece_svg(piece: Piece) -> svg::Svg {
-    static SVGS: OnceLock<[svg::Svg; Piece::LEN]> = OnceLock::new();
-    let svgs = SVGS.get_or_init(|| {
-        Piece::ALL.map(|piece| {
-            let kind = format!("{:?}", piece.kind()).to_lowercase();
-            let promoted = if piece.promoted() { "promoted-" } else { "" };
-            svg::Svg::new(format!(
-                "{}/assets/pieces/{promoted}{kind}.svg",
-                env!("CARGO_MANIFEST_DIR")
-            ))
-        })
-    });
-    svgs[piece].clone()
+fn piece_name(piece: Piece) -> &'static str {
+    use Piece as P;
+    match piece {
+        P::SentePawn => "0FU",
+        P::SenteLance => "0KY",
+        P::SenteKnight => "0KE",
+        P::SenteSilver => "0GI",
+        P::SenteGold => "0KI",
+        P::SenteBishop => "0KA",
+        P::SenteRook => "0HI",
+        P::SenteKing => "0OU",
+        P::SentePromotedPawn => "0TO",
+        P::SentePromotedLance => "0NY",
+        P::SentePromotedKnight => "0NK",
+        P::SentePromotedSilver => "0NG",
+        P::SentePromotedBishop => "0UM",
+        P::SentePromotedRook => "0RY",
+
+        P::GotePawn => "1FU",
+        P::GoteLance => "1KY",
+        P::GoteKnight => "1KE",
+        P::GoteSilver => "1GI",
+        P::GoteGold => "1KI",
+        P::GoteBishop => "1KA",
+        P::GoteRook => "1HI",
+        P::GoteKing => "1OU",
+        P::GotePromotedPawn => "1TO",
+        P::GotePromotedLance => "1NY",
+        P::GotePromotedKnight => "1NK",
+        P::GotePromotedSilver => "1NG",
+        P::GotePromotedBishop => "1UM",
+        P::GotePromotedRook => "1RY",
+        _ => "",
+    }
 }
