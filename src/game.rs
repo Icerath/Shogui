@@ -27,6 +27,7 @@ pub enum Message {
     PlayEngine,
     Reset,
     SetSfen(String),
+    SubmitSfen,
     Board(board::Message),
     EngineResponse(Arc<Response>),
     SetPly(usize),
@@ -125,10 +126,10 @@ impl Game {
                     }
                 }
             }
-            Message::SetSfen(sfen) => {
-                if let Some(board) = Board::from_sfen(&sfen) {
+            Message::SetSfen(sfen) => self.sfen = sfen,
+            Message::SubmitSfen => {
+                if let Some(board) = Board::from_sfen(&self.sfen) {
                     self.board_state = BoardState::init(board);
-                    self.sfen = self.board_state.board.to_sfen();
                 }
             }
         }
@@ -163,6 +164,9 @@ impl Game {
                     text_input("", &self.sfen)
                         .on_input_maybe(
                             self.board_state.playing.is_none().then_some(Message::SetSfen)
+                        )
+                        .on_submit_maybe(
+                            self.board_state.playing.is_none().then_some(Message::SubmitSfen)
                         )
                         .width(Length::FillPortion(9)),
                     Space::new().width(Length::Fill)
