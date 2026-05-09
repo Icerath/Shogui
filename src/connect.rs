@@ -198,7 +198,7 @@ impl Connect {
                         self.state = if host { State::HostMenu } else { State::JoinMenu };
                     }
                     Packet::PlayMove(mov) => {
-                        if !game.board_state.legal_moves.contains(&mov) {
+                        if !game.board_state.board.is_legal(mov) {
                             return task(protocol::send(stream.clone(), Packet::CloseConnection));
                         }
 

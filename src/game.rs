@@ -69,7 +69,7 @@ impl Game {
             }
             Message::EngineResponse(response) => match *response {
                 Response::BestMove(BestMove::Move { mov, ponder: _ }) => {
-                    if !self.board_state.legal_moves.contains(&mov) {
+                    if !self.board_state.board.is_legal(mov) {
                         eprintln!("[ERROR] engine tried to play {mov}");
                         return crate::Task::none();
                     }

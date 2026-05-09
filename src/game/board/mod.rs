@@ -88,7 +88,7 @@ impl BoardState {
                 self.promote_state = Some(PromoteState { from, to, nonpromote });
             }
             Message::Move(action) => {
-                assert!(self.legal_moves.contains(&action));
+                assert!(self.board.is_legal(action));
 
                 if self.playing.is_none_or(|playing| self.board.active == playing) {
                     self.selected = None;
@@ -247,8 +247,8 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
                 let nonpromote = Move::Board { from, to, promoted: false };
                 let promote = Move::Board { from, to, promoted: true };
 
-                let has_nonpromote = self.legal_moves.contains(&nonpromote);
-                let has_promote = self.legal_moves.contains(&promote);
+                let has_nonpromote = self.board.is_legal(nonpromote);
+                let has_promote = self.board.is_legal(promote);
 
                 match (has_promote, has_nonpromote) {
                     (false, false) => Message::Selected(None),
@@ -259,7 +259,7 @@ impl Widget<Message, Theme, Renderer> for &BoardState {
             }
             SelectedPiece::Hand(piece) => {
                 if piece.side() == self.board.active
-                    && self.legal_moves.contains(&Move::Drop { piece: piece.kind(), to })
+                    && self.board.is_legal(Move::Drop { piece: piece.kind(), to })
                 {
                     Message::Move(Move::Drop { piece: piece.kind(), to })
                 } else {
