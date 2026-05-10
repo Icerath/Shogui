@@ -67,22 +67,31 @@ impl Game {
                     engine.stop();
                 }
             }
-            Message::EngineResponse(response) => match *response {
-                Response::BestMove(BestMove::Move { mov, ponder: _ }) => {
-                    if !self.board_state.board.is_legal(mov) {
-                        eprintln!("[ERROR] engine tried to play {mov}");
-                        return crate::Task::none();
+            Message::EngineResponse(response) => {
+                let Some(engine) = &self.engine else {
+                    eprintln!("[ERROR] engine response without engine!");
+                    return crate::Task::none();
+                };
+                match *response {
+                    Response::BestMove(BestMove::Move { mov, ponder: _ }) => {
+                        if !self.board_state.board.is_legal(mov) {
+                            eprintln!("[ERROR] engine tried to play {mov}");
+                            engine.stop();
+                            self.engine = None;
+                            self.board_state.playing = None;
+                            return crate::Task::none();
+                        }
+                        self.history.push((self.board_state.board.clone(), mov));
+                        self.board_state.update(board::Message::Move(mov));
+                        self.sfen = self.board_state.board.to_sfen();
+                        self.engine
+                            .as_mut()
+                            .unwrap()
+                            .position(Position::Sfen(self.sfen.clone()), vec![]);
                     }
-                    self.history.push((self.board_state.board.clone(), mov));
-                    self.board_state.update(board::Message::Move(mov));
-                    self.sfen = self.board_state.board.to_sfen();
-                    self.engine
-                        .as_mut()
-                        .unwrap()
-                        .position(Position::Sfen(self.sfen.clone()), vec![]);
+                    _ => eprintln!("{response}"),
                 }
-                _ => eprintln!("{response}"),
-            },
+            }
             Message::PlayEngine => {
                 let (tx, rx) = iced::futures::channel::mpsc::unbounded();
                 let mut engine = Engine::default();
