@@ -19,7 +19,7 @@ use iced::{
     widget::{self, Button, Container, Radio, Text, TextInput, button, column, row},
 };
 use iced_aw::Spinner;
-use petty_shogi::{Board, Side};
+use petty_shogi::{Board, STARTING_SFEN, Side};
 
 use crate::{
     App, Task,
@@ -96,11 +96,7 @@ pub struct GameSettings {
 }
 impl Default for GameSettings {
     fn default() -> Self {
-        Self {
-            host_side: Side::Sente,
-            eval_bar: false,
-            start_position: Board::start_pos().to_sfen(),
-        }
+        Self { host_side: Side::Sente, eval_bar: false, start_position: STARTING_SFEN.into() }
     }
 }
 
