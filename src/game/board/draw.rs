@@ -1,9 +1,9 @@
 use std::sync::OnceLock;
 
 use iced::{
-    Border,
+    Border, Font, Pixels,
     advanced::{Text, svg, text::Renderer as _},
-    alignment,
+    alignment::{self, Vertical},
     border::Radius,
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
@@ -75,6 +75,7 @@ impl BoardState {
         Self::draw_grid_lines(bounds, renderer);
         self.draw_pieces(bounds, renderer);
         self.draw_promote_options(bounds, theme, renderer);
+        self.draw_position_guides(bounds, renderer);
     }
 
     fn draw_board_image(&self, bounds: Rectangle, renderer: &mut Renderer) {
@@ -234,7 +235,7 @@ impl BoardState {
                     bounds: Rectangle::new(bounds.position() + offset, size),
                     ..Quad::default()
                 };
-                renderer.fill_quad(quad, Background::Color(Color::BLACK));
+                renderer.fill_quad(quad, Color::BLACK);
             };
             let line_width = 2.0;
             for i in 0..10u8 {
@@ -246,6 +247,40 @@ impl BoardState {
                 let offset = Vector::new(0.0, (bounds.height - line_width) / 9.0 * i as f32);
                 let size = Size::new(bounds.width, line_width);
                 draw_line(offset, size);
+            }
+        });
+    }
+    fn draw_position_guides(&self, bounds: Rectangle, renderer: &mut Renderer) {
+        let text = |content, align_x| Text {
+            content,
+            bounds: bounds.size(),
+            align_x,
+            align_y: Vertical::Top,
+            shaping: Shaping::Basic,
+            line_height: LineHeight::Absolute(Pixels(16.0)),
+            size: Pixels(16.0),
+            font: Font::DEFAULT,
+            wrapping: Wrapping::None,
+        };
+
+        renderer.with_layer(Rectangle::INFINITE, |renderer| {
+            for sq in self.face_up.end_rank().mask() {
+                let sq_rect = self.piece_rect(bounds, sq);
+                renderer.fill_text(
+                    text(sq.file().to_string(), Alignment::Left),
+                    Point::new(sq_rect.x + 3.0, sq_rect.y + 3.0),
+                    Color::BLACK,
+                    bounds,
+                );
+            }
+            for sq in File::_1.mask() {
+                let sq_rect = self.piece_rect(bounds, sq);
+                renderer.fill_text(
+                    text(sq.rank().to_string(), Alignment::Right),
+                    Point::new(sq_rect.x + sq_rect.width - 3.0, sq_rect.y + 3.0),
+                    Color::BLACK,
+                    bounds,
+                );
             }
         });
     }
